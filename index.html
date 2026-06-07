@@ -138,8 +138,13 @@
 </div>
 
 <script>
-    // Alpha Vantage API key for fetching Nasdaq and VIX data
-    const API_KEY = 'IDUZT5BCYPABSJA1';
+    // 使用 CORS 代理从公开 CSV 获取数据，无需 API 密钥
+    // 该代理将请求转发到目标 URL 并返回原始内容，解决浏览器的跨域限制
+    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+    // 纳斯达克综合指数 CSV 数据源（Eco3min，每日收盘价）
+    const NASDAQ_CSV_URL = 'https://eco3min.fr/dataset/nasdaq-composite.csv';
+    // VIX 指数 CSV 数据源（DataHub，包含开盘、最高、最低、收盘）
+    const VIX_CSV_URL = 'https://raw.githubusercontent.com/finance-data-sci/finance-vix/master/finance-vix/vix-daily.csv';
     /**
      * 加载CSV并解析为 {dates:[], values:[]} 结构。假设CSV第一列为日期，最后一列为所需值。
      * @param {string} url CSV 文件地址
@@ -156,12 +161,15 @@
         for (const line of lines) {
             const parts = line.split(',');
             const dateStr = parts[0];
-            // Alpha Vantage CSV: timestamp, open, high, low, close, volume
-            // Use the fifth column (index 4) as the closing price
-            const closeStr = parts[4];
+            // 公共 CSV 文件往往最后一列是收盘价，若只有两列，则第二列即为收盘价
+            const closeStr = parts[parts.length - 1];
             if (dateStr && closeStr) {
-                dates.push(dateStr);
-                values.push(parseFloat(closeStr));
+                const parsed = parseFloat(closeStr);
+                // 忽略无法解析的值
+                if (!isNaN(parsed)) {
+                    dates.push(dateStr);
+                    values.push(parsed);
+                }
             }
         }
         return { dates, values };
@@ -423,55 +431,58 @@
      */
     async function updateBoard() {
         try {
-            // 使用 Alpha Vantage API 获取纳斯达克和 VIX 数据
-            const nasdaqUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=NDX&apikey=${API_KEY}&datatype=csv`;
-            const vixUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=VIX&apikey=${API_KEY}&datatype=csv`;
+            // 使用 CORS 代理获取纳斯达克和 VIX 数据
+            const nasdaqUrl = CORS_PROXY + encodeURIComponent(NASDAQ_CSV_URL);
+            const vixUrl = CORS_PROXY + encodeURIComponent(VIX_CSV_URL);
             const nasdaqData = await loadCSV(nasdaqUrl);
             const vixData = await loadCSV(vixUrl);
-            // Alpha Vantage CSV 按日期降序排列，需要反转为升序
-            nasdaqData.dates.reverse();
-            nasdaqData.values.reverse();
-            vixData.dates.reverse();
-            vixData.values.reverse();
+            // 将数据按日期升序排序，确保时间序列正确
+            const zipNasdaq = nasdaqData.dates.map((d, i) => ({ date: d, value: nasdaqData.values[i] }));
+            zipNasdaq.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const nasdaqDates = zipNasdaq.map(item => item.date);
+            const nasdaqPrices = zipNasdaq.map(item => item.value);
+            const zipVix = vixData.dates.map((d, i) => ({ date: d, value: vixData.values[i] }));
+            zipVix.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // 只保留最近120天的VIX数据
+            const vixSortedDates = zipVix.map(item => item.date);
+            const vixSortedValues = zipVix.map(item => item.value);
+            const vixRecentCount = 120;
+            const vixDates = vixSortedDates.slice(-vixRecentCount);
+            const vixValues = vixSortedValues.slice(-vixRecentCount);
             // 仅保留最近 400 个交易日数据以加快计算
             const recentCount = 400;
-            const nasdaqDates = nasdaqData.dates.slice(-recentCount);
-            const nasdaqPrices = nasdaqData.values.slice(-recentCount);
+            const trimmedDates = nasdaqDates.slice(-recentCount);
+            const trimmedPrices = nasdaqPrices.slice(-recentCount);
             // 计算 200 日均线数组
             const ma200Values = [];
-            for (let i = 0; i < nasdaqPrices.length; i++) {
+            for (let i = 0; i < trimmedPrices.length; i++) {
                 if (i < 200) {
                     ma200Values.push(null);
                 } else {
-                    const window = nasdaqPrices.slice(i - 199, i + 1);
+                    const window = trimmedPrices.slice(i - 199, i + 1);
                     const avg = window.reduce((a, b) => a + b, 0) / 200;
                     ma200Values.push(avg);
                 }
             }
             // 计算 MACD
-            const macdData = calculateMACD(nasdaqPrices);
+            const macdData = calculateMACD(trimmedPrices);
             // 计算 RSI
-            const rsiData = calculateRSI(nasdaqPrices);
-            // VIX 最近 120 天
-            const vixRecentCount = 120;
-            const vixDates = vixData.dates.slice(-vixRecentCount);
-            const vixValues = vixData.values.slice(-vixRecentCount);
+            const rsiData = calculateRSI(trimmedPrices);
             // 最新数据
-            const lastPrice = nasdaqPrices[nasdaqPrices.length - 1];
-            // 最近 200 天均值最后一项
+            const lastPrice = trimmedPrices[trimmedPrices.length - 1];
             const lastMA200 = ma200Values[ma200Values.length - 1];
             const lastMACD = macdData.macdLine[macdData.macdLine.length - 1];
             const lastSignal = macdData.signalLine[macdData.signalLine.length - 1];
             const lastRSI = rsiData[rsiData.length - 1];
             const lastVIX = vixValues[vixValues.length - 1];
-            const lastDate = nasdaqDates[nasdaqDates.length - 1];
+            const lastDate = trimmedDates[trimmedDates.length - 1];
             // 更新顶部文字
             const summary = document.getElementById('summary-text');
             summary.innerHTML = `<strong>数据更新日期：</strong>${lastDate} &nbsp;&nbsp; <strong>纳指收盘价：</strong>${lastPrice.toFixed(2)}`;
             // 更新灯
             updateLights({ price: lastPrice, ma200: lastMA200, macd: lastMACD, signal: lastSignal, rsi: lastRSI, vix: lastVIX });
             // 绘制图表
-            drawCharts({ nasdaqDates, nasdaqPrices, ma200Values, macdData, rsiData, vixDates, vixValues });
+            drawCharts({ nasdaqDates: trimmedDates, nasdaqPrices: trimmedPrices, ma200Values, macdData, rsiData, vixDates, vixValues });
         } catch (error) {
             console.error('更新数据出错：', error);
             alert('更新数据失败，可能是网络问题或数据源不可用。');
