@@ -138,6 +138,8 @@
 </div>
 
 <script>
+    // Alpha Vantage API key for fetching Nasdaq and VIX data
+    const API_KEY = 'IDUZT5BCYPABSJA1';
     /**
      * 加载CSV并解析为 {dates:[], values:[]} 结构。假设CSV第一列为日期，最后一列为所需值。
      * @param {string} url CSV 文件地址
@@ -154,10 +156,12 @@
         for (const line of lines) {
             const parts = line.split(',');
             const dateStr = parts[0];
-            const valueStr = parts[parts.length - 1];
-            if (dateStr && valueStr) {
+            // Alpha Vantage CSV: timestamp, open, high, low, close, volume
+            // Use the fifth column (index 4) as the closing price
+            const closeStr = parts[4];
+            if (dateStr && closeStr) {
                 dates.push(dateStr);
-                values.push(parseFloat(valueStr));
+                values.push(parseFloat(closeStr));
             }
         }
         return { dates, values };
@@ -419,21 +423,16 @@
      */
     async function updateBoard() {
         try {
-            // 尝试从 Eco3min 站点获取纳斯达克数据，如果失败则尝试 FRED 直接链接
-            let nasdaqData;
-            try {
-                nasdaqData = await loadCSV('https://eco3min.fr/dataset/nasdaq-composite.csv');
-            } catch (err1) {
-                nasdaqData = await loadCSV('https://fred.stlouisfed.org/graph/fredgraph.csv?id=NASDAQCOM');
-            }
-            // VIX 数据
-            let vixData;
-            try {
-                vixData = await loadCSV('https://datahub.io/core/finance-vix/_r/-/data/vix-daily.csv');
-            } catch (err2) {
-                // fallback: 尝试从 CBOE 源获取
-                vixData = await loadCSV('https://cdn.cboe.com/us/futures/market_statistics/historical_data/vixDailyPricedData.csv');
-            }
+            // 使用 Alpha Vantage API 获取纳斯达克和 VIX 数据
+            const nasdaqUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=NDX&apikey=${API_KEY}&datatype=csv`;
+            const vixUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=VIX&apikey=${API_KEY}&datatype=csv`;
+            const nasdaqData = await loadCSV(nasdaqUrl);
+            const vixData = await loadCSV(vixUrl);
+            // Alpha Vantage CSV 按日期降序排列，需要反转为升序
+            nasdaqData.dates.reverse();
+            nasdaqData.values.reverse();
+            vixData.dates.reverse();
+            vixData.values.reverse();
             // 仅保留最近 400 个交易日数据以加快计算
             const recentCount = 400;
             const nasdaqDates = nasdaqData.dates.slice(-recentCount);
