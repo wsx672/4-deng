@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4灯指标提醒</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 15px 0;
+        }
+        .indicator-name {
+            flex: 1;
+        }
+        .light {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            margin-left: 10px;
+            background-color: #ccc;
+            border: 1px solid #aaa;
+        }
+        .red {
+            background-color: #e74c3c;
+        }
+        .yellow {
+            background-color: #f1c40f;
+        }
+        .green {
+            background-color: #2ecc71;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #3498db;
+        }
+        .note {
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>4灯指标提醒</h1>
+        <div class="indicator">
+            <div class="indicator-name">200日移动平均线 (Long trend)</div>
+            <div id="ma-light" class="light"></div>
+        </div>
+        <div class="indicator">
+            <div class="indicator-name">MACD (动量)</div>
+            <div id="macd-light" class="light"></div>
+        </div>
+        <div class="indicator">
+            <div class="indicator-name">RSI (强弱指标)</div>
+            <div id="rsi-light" class="light"></div>
+        </div>
+        <div class="indicator">
+            <div class="indicator-name">波动率指数 VXN</div>
+            <div id="vxn-light" class="light"></div>
+        </div>
+        <button onclick="updateIndicators()">更新指标</button>
+        <p class="note">此页面仅供学习参考，不构成投资建议。动态数据需要有效的金融数据 API，并可能需要您提供 API 密钥。</p>
+    </div>
+    <script>
+        // 示例：更新指标灯的颜色
+        // 当您有可用的金融数据 API 时，可以在此函数中编写代码，
+        // 抓取实时数据并计算指标。下面的代砄演示如何根据随机数模拟数据。
+        async function updateIndicators() {
+            // 在这里设置您自己的 API 密钥。示例使用 Alpha Vantage，您需要注册后替换此处。
+            const API_KEY = 'YOUR_API_KEY_HERE';
+            // 为了演示，这里生成虚拟数据。实际使用时请调用 API 替换这些代砄。
+            const maSignal = Math.random();
+            const macdSignal = Math.random();
+            const rsiSignal = Math.random();
+            const vxnSignal = Math.random();
+
+            // 根据信号更新灯颜色。
+            setLight('ma-light', maSignal);
+            setLight('macd-light', macdSignal);
+            setLight('rsi-light', rsiSignal);
+            setLight('vxn-light', vxnSignal);
+
+            // 如果您希望编写自己的指标算法，可以参考以下伪代码：
+            // 1. 使用 fetch() 调用金融数据 API ( 例如 Alpha Vantage 或其他 ) 获取纳斯达克指数的日线收盘价。
+            // 2. 计算 200 日移动均线：取最近 200 个交易日的收盘价求平均。
+            // 3. 计算 MACD：使用 12 日和 26 日指数移动平均线（EMA）求差，再计算 9 日 EMA 作为信号线，比较两者。
+            // 4. 计算 RSI：使用 14 日平均涨幅和跌幅计算指标，判断是否超买/超卖。
+            // 5. 获取波动率指数 VXN：需要有支持该指数的 API，可通过类似于 VIX 的指标近似。
+            // 6. 根据指标结果设置灯颜色：
+            //    - 绿色：条件支持买入，例如价格高于 200 日均线、MACD 为正并且 RSI 在合理区间。
+            //    - 黄灯：观望状态，信号不明确或指标互相矛盾。
+            //    - 红灯：可能需要谨慎，例如价格低于 200 日均线、MACD 为负、RSI 超买、VXN 很高等。
+        }
+
+        function setLight(id, signal) {
+            const element = document.getElementById(id);
+            // 清除现有颜色类
+            element.classList.remove('red', 'yellow', 'green');
+            // 根据信号阈值设定颜色
+            if (signal < 0.33) {
+                element.classList.add('green');
+            } else if (signal < 0.66) {
+                element.classList.add('yellow');
+            } else {
+                element.classList.add('red');
+            }
+        }
+
+        // 初始调用一次以设置默认颜色
+        updateIndicators();
+    </script>
+</body>
+</html>
