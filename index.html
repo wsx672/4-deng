@@ -298,7 +298,7 @@
 
     // 页面加载完成后，异步获取 JSON 数据并初始化图表
     window.addEventListener('DOMContentLoaded', () => {
-  fetch('https://raw.githubusercontent.com/wsx672/4-deng/main/nasdaq_vix_data.json')
+  fetch('nasdaq_vix_data.json')
             .then(response => response.json())
             .then(json => {
                 initializeDashboard(json);
