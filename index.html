@@ -3,493 +3,311 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>纳斯达克四灯指标看板</title>
-    <!-- 引入 Chart.js 用于绘制图表 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <title>纳斯达克指标仪表板</title>
+    <!-- 引入 Chart.js 库和注解插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.3/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: Arial, sans-serif;
             margin: 0;
-            background-color: #f5f5f5;
-            color: #0f204b;
-        }
-        .board {
-            max-width: 1200px;
-            margin: 20px auto;
-            background: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            padding: 24px;
+            padding: 0;
+            background-color: #f7f7f7;
+            color: #333;
         }
         h1 {
             text-align: center;
-            margin-top: 0;
-            font-size: 24px;
+            padding: 20px;
         }
-        .top-info {
+        .summary {
+            background-color: #fff;
+            padding: 20px;
+            margin: 20px auto;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 1000px;
+        }
+        .summary-item {
+            display: inline-block;
+            width: 24%;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .charts {
+            max-width: 1000px;
+            margin: 0 auto;
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        .top-info .summary {
-            flex: 1;
-            min-width: 200px;
-        }
-        .top-info .lights {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        .light {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background-color: #d1d5db;
-            border: 1px solid #94a3b8;
-        }
-        .light.green { background-color: #10b981; border-color: #059669; }
-        .light.yellow { background-color: #fbbf24; border-color: #f59e0b; }
-        .light.red { background-color: #ef4444; border-color: #dc2626; }
-        .light-label {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-size: 12px;
-        }
-        .chart-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            grid-gap: 20px;
         }
         .chart-container {
-            background: #f9fafb;
+            width: 48%;
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
             border-radius: 8px;
-            padding: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        .note {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 24px;
-            text-align: center;
-        }
-        button {
-            margin-top: 16px;
-            padding: 10px 20px;
-            font-size: 14px;
-            background-color: #0f766e;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #115e59;
+        canvas {
+            width: 100% !important;
+            height: 350px !important;
         }
     </style>
 </head>
 <body>
-<div class="board">
-    <h1>纳斯达克四灯指标看板</h1>
-    <div class="top-info">
-        <div class="summary" id="summary-text">
-            <!-- 将在脚本中填充最新指数值和日期 -->
+    <h1>纳斯达克指标仪表板</h1>
+    <div class="summary" id="summary"></div>
+    <div class="charts">
+        <div class="chart-container">
+            <h3>MACD 指标</h3>
+            <canvas id="macdChart"></canvas>
         </div>
-        <div class="lights">
-            <div class="light-label">
-                <div id="ma-light" class="light"></div>
-                <span>200日均线</span>
-            </div>
-            <div class="light-label">
-                <div id="macd-light" class="light"></div>
-                <span>MACD</span>
-            </div>
-            <div class="light-label">
-                <div id="rsi-light" class="light"></div>
-                <span>RSI</span>
-            </div>
-            <div class="light-label">
-                <div id="vix-light" class="light"></div>
-                <span>VIX</span>
-            </div>
+        <div class="chart-container">
+            <h3>收盘价与200日均线</h3>
+            <canvas id="maChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>RSI 指标</h3>
+            <canvas id="rsiChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>VIX 指数</h3>
+            <canvas id="vixChart"></canvas>
         </div>
     </div>
-    <div class="chart-grid">
-        <div class="chart-container">
-            <canvas id="priceChart" height="200"></canvas>
-        </div>
-        <div class="chart-container">
-            <canvas id="maChart" height="200"></canvas>
-        </div>
-        <div class="chart-container">
-            <canvas id="macdChart" height="200"></canvas>
-        </div>
-        <div class="chart-container">
-            <canvas id="rsiChart" height="200"></canvas>
-        </div>
-        <div class="chart-container">
-            <canvas id="vixChart" height="200"></canvas>
-        </div>
-    </div>
-    <button onclick="updateBoard()">更新数据</button>
-    <p class="note">本看板仅供学习与参考使用，不构成投资建议。数据来自公开数据源，可能存在延迟。</p>
-</div>
 
-<script>
-    // 使用 CORS 代理从公开 CSV 获取数据，无需 API 密钥
-    // 该代理将请求转发到目标 URL 并返回原始内容，解决浏览器的跨域限制
-    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-    // 纳斯达克综合指数 CSV 数据源（Eco3min，每日收盘价）
-    const NASDAQ_CSV_URL = 'https://eco3min.fr/dataset/nasdaq-composite.csv';
-    // VIX 指数 CSV 数据源（DataHub，包含开盘、最高、最低、收盘）
-    const VIX_CSV_URL = 'https://raw.githubusercontent.com/finance-data-sci/finance-vix/master/finance-vix/vix-daily.csv';
+    <script>
     /**
-     * 加载CSV并解析为 {dates:[], values:[]} 结构。假设CSV第一列为日期，最后一列为所需值。
-     * @param {string} url CSV 文件地址
+     * 加载数据后初始化仪表板。
+     * 页面加载完成后，使用 fetch 从同目录的 nasdaq_vix_data.json 文件获取数据，
+     * 然后绘制图表和更新概要。
      */
-    async function loadCSV(url) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('网络请求失败: ' + response.status);
-        const text = await response.text();
-        const lines = text.trim().split(/\r?\n/);
-        // 忽略首行标题
-        lines.shift();
-        const dates = [];
-        const values = [];
-        for (const line of lines) {
-            const parts = line.split(',');
-            const dateStr = parts[0];
-            // 公共 CSV 文件往往最后一列是收盘价，若只有两列，则第二列即为收盘价
-            const closeStr = parts[parts.length - 1];
-            if (dateStr && closeStr) {
-                const parsed = parseFloat(closeStr);
-                // 忽略无法解析的值
-                if (!isNaN(parsed)) {
-                    dates.push(dateStr);
-                    values.push(parsed);
-                }
-            }
-        }
-        return { dates, values };
-    }
+    function initializeDashboard(data) {
+        const nasdaqDates = data.nasdaq.dates.map(d => new Date(d));
+        const vixDates = data.vix.dates.map(d => new Date(d));
 
-    /**
-     * 计算指数移动平均线 (EMA)
-     * @param {number[]} values 数据数组
-     * @param {number} period 周期长度
-     */
-    function calculateEMA(values, period) {
-        const k = 2 / (period + 1);
-        let emaArray = [];
-        let ema = values[0];
-        for (let i = 0; i < values.length; i++) {
-            if (i === 0) {
-                ema = values[0];
-            } else {
-                ema = values[i] * k + ema * (1 - k);
-            }
-            emaArray.push(ema);
+        function updateSummary() {
+            const latestIndex = nasdaqDates.length - 1;
+            const summaryEl = document.getElementById('summary');
+            const rows = [];
+            rows.push(`<div class="summary-item"><strong>数据日期：</strong><br>${data.nasdaq.dates[latestIndex]}</div>`);
+            rows.push(`<div class="summary-item"><strong>收盘价：</strong><br>${data.nasdaq.close[latestIndex].toFixed(2)}</div>`);
+            rows.push(`<div class="summary-item"><strong>MACD：</strong><br>${data.nasdaq.macd[latestIndex].toFixed(2)} / 信号线 ${data.nasdaq.macd_signal[latestIndex].toFixed(2)}</div>`);
+            rows.push(`<div class="summary-item"><strong>200日均线：</strong><br>${data.nasdaq.ma200[latestIndex].toFixed(2)}</div>`);
+            rows.push(`<div class="summary-item"><strong>RSI：</strong><br>${data.nasdaq.rsi[latestIndex].toFixed(2)}</div>`);
+            rows.push(`<div class="summary-item"><strong>VIX：</strong><br>${data.vix.close[data.vix.close.length - 1].toFixed(2)}</div>`);
+            summaryEl.innerHTML = rows.join('');
         }
-        return emaArray;
-    }
 
-    /**
-     * 计算 MACD 指标
-     * @param {number[]} prices 收盘价数组
-     */
-    function calculateMACD(prices) {
-        const ema12 = calculateEMA(prices, 12);
-        const ema26 = calculateEMA(prices, 26);
-        const macdLine = ema12.map((v, i) => v - ema26[i]);
-        const signalLine = calculateEMA(macdLine, 9);
-        const histogram = macdLine.map((v, i) => v - signalLine[i]);
-        return { macdLine, signalLine, histogram };
-    }
+        updateSummary();
 
-    /**
-     * 计算 RSI 指标
-     * @param {number[]} prices 收盘价数组
-     * @param {number} period 周期长度，默认为 14
-     */
-    function calculateRSI(prices, period = 14) {
-        let gains = 0;
-        let losses = 0;
-        for (let i = 1; i <= period; i++) {
-            const change = prices[i] - prices[i - 1];
-            if (change >= 0) {
-                gains += change;
-            } else {
-                losses -= change; // 负数取相反数
-            }
-        }
-        let avgGain = gains / period;
-        let avgLoss = losses / period;
-        const rsiArray = [];
-        for (let i = period; i < prices.length; i++) {
-            if (i > period) {
-                const change = prices[i] - prices[i - 1];
-                if (change >= 0) {
-                    avgGain = (avgGain * (period - 1) + change) / period;
-                    avgLoss = (avgLoss * (period - 1) + 0) / period;
-                } else {
-                    avgGain = (avgGain * (period - 1) + 0) / period;
-                    avgLoss = (avgLoss * (period - 1) + (-change)) / period;
-                }
-            }
-            const rs = avgLoss === 0 ? 0 : avgGain / avgLoss;
-            const rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + rs);
-            rsiArray.push(rsi);
-        }
-        return rsiArray;
-    }
-
-    /**
-     * 更新四个指标的灯颜色
-     */
-    function updateLights({ price, ma200, macd, signal, rsi, vix }) {
-        // 200日均线：价格高于均线1%则绿，低于均线1%红，否则黄
-        const ratio = (price - ma200) / ma200;
-        const maLight = document.getElementById('ma-light');
-        maLight.className = 'light';
-        if (ratio > 0.01) {
-            maLight.classList.add('green');
-        } else if (ratio < -0.01) {
-            maLight.classList.add('red');
-        } else {
-            maLight.classList.add('yellow');
-        }
-        // MACD：DIF>DEA并且DIF>0为绿；DIF>DEA但DIF<0为黄；其余红
-        const macdLight = document.getElementById('macd-light');
-        macdLight.className = 'light';
-        if (macd > signal && macd >= 0) {
-            macdLight.classList.add('green');
-        } else if (macd > signal && macd < 0) {
-            macdLight.classList.add('yellow');
-        } else {
-            macdLight.classList.add('red');
-        }
-        // RSI：小于30为绿，30-70为黄，大于70为红
-        const rsiLight = document.getElementById('rsi-light');
-        rsiLight.className = 'light';
-        if (rsi < 30) {
-            rsiLight.classList.add('green');
-        } else if (rsi <= 70) {
-            rsiLight.classList.add('yellow');
-        } else {
-            rsiLight.classList.add('red');
-        }
-        // VIX：小于20为绿，20-30黄，大于30红
-        const vixLight = document.getElementById('vix-light');
-        vixLight.className = 'light';
-        if (vix < 20) {
-            vixLight.classList.add('green');
-        } else if (vix <= 30) {
-            vixLight.classList.add('yellow');
-        } else {
-            vixLight.classList.add('red');
-        }
-    }
-
-    /**
-     * 绘制图表
-     */
-    function drawCharts({ nasdaqDates, nasdaqPrices, ma200Values, macdData, rsiData, vixDates, vixValues }) {
-        const ctxPrice = document.getElementById('priceChart').getContext('2d');
-        new Chart(ctxPrice, {
-            type: 'line',
-            data: {
-                labels: nasdaqDates,
-                datasets: [{
-                    label: '纳指收盘价',
-                    data: nasdaqPrices,
-                    borderColor: '#2563eb',
-                    fill: false,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                scales: {
-                    y: {
-                        ticks: {
-                            callback: value => value.toFixed(0)
-                        }
-                    }
-                },
-                plugins: {
-                    legend: { display: true }
-                }
-            }
-        });
-        const ctxMA = document.getElementById('maChart').getContext('2d');
-        new Chart(ctxMA, {
-            type: 'line',
-            data: {
-                labels: nasdaqDates,
-                datasets: [
-                    {
-                        label: '收盘价',
-                        data: nasdaqPrices,
-                        borderColor: '#1d4ed8',
-                        fill: false,
-                        tension: 0.1
-                    },
-                    {
-                        label: '200日均线',
-                        data: ma200Values,
-                        borderColor: '#f59e0b',
-                        fill: false,
-                        tension: 0.1
-                    }
-                ]
-            },
-            options: {
-                plugins: { legend: { display: true } },
-                scales: { y: { ticks: { callback: value => value.toFixed(0) } } }
-            }
-        });
-        const ctxMACD = document.getElementById('macdChart').getContext('2d');
-        new Chart(ctxMACD, {
+        // MACD chart (line and histogram)
+        const macdCtx = document.getElementById('macdChart').getContext('2d');
+        const macdHistogram = data.nasdaq.macd.map((val, idx) => val - data.nasdaq.macd_signal[idx]);
+        new Chart(macdCtx, {
             type: 'bar',
             data: {
                 labels: nasdaqDates,
                 datasets: [
                     {
                         type: 'bar',
-                        label: '柱状图',
-                        data: macdData.histogram,
-                        backgroundColor: macdData.histogram.map(val => val >= 0 ? '#10b981' : '#ef4444'),
+                        label: 'MACD 柱状图',
+                        data: macdHistogram,
+                        backgroundColor: macdHistogram.map(val => val >= 0 ? 'rgba(0, 200, 83, 0.5)' : 'rgba(229, 57, 53, 0.5)'),
+                        borderWidth: 0
                     },
                     {
                         type: 'line',
-                        label: 'DIF',
-                        data: macdData.macdLine,
-                        borderColor: '#2563eb',
+                        label: 'MACD',
+                        data: data.nasdaq.macd,
+                        borderColor: '#00C853',
+                        borderWidth: 1.5,
                         fill: false,
-                        tension: 0.1
+                        yAxisID: 'y1'
                     },
                     {
                         type: 'line',
-                        label: 'DEA',
-                        data: macdData.signalLine,
-                        borderColor: '#f59e0b',
+                        label: '信号线',
+                        data: data.nasdaq.macd_signal,
+                        borderColor: '#ffab00',
+                        borderWidth: 1.5,
                         fill: false,
-                        tension: 0.1
+                        yAxisID: 'y1'
                     }
                 ]
             },
             options: {
-                plugins: { legend: { display: true } },
-                scales: { y: { ticks: { callback: value => value.toFixed(2) } } }
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'month',
+                            displayFormats: { month: 'yyyy-MM' }
+                        },
+                        ticks: { maxTicksLimit: 10 }
+                    },
+                    y: {
+                        position: 'left',
+                        beginAtZero: true,
+                        title: { display: true, text: 'MACD 柱状图' }
+                    },
+                    y1: {
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'MACD 与信号线' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                interaction: { mode: 'nearest', intersect: false }
             }
         });
-        const ctxRSI = document.getElementById('rsiChart').getContext('2d');
-        new Chart(ctxRSI, {
+
+        // Moving average and close price chart
+        const maCtx = document.getElementById('maChart').getContext('2d');
+        new Chart(maCtx, {
             type: 'line',
             data: {
-                labels: nasdaqDates.slice(-rsiData.length),
+                labels: nasdaqDates,
                 datasets: [
                     {
-                        label: 'RSI (14)',
-                        data: rsiData,
-                        borderColor: '#0d9488',
-                        fill: false,
-                        tension: 0.1
+                        label: '收盘价',
+                        data: data.nasdaq.close,
+                        borderColor: '#2962FF',
+                        borderWidth: 1.5,
+                        fill: false
+                    },
+                    {
+                        label: '200日均线',
+                        data: data.nasdaq.ma200,
+                        borderColor: '#D500F9',
+                        borderWidth: 1.5,
+                        fill: false
                     }
                 ]
             },
             options: {
-                plugins: { legend: { display: true } },
-                scales: { y: { suggestedMin: 0, suggestedMax: 100 } }
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', displayFormats: { month: 'yyyy-MM' } },
+                        ticks: { maxTicksLimit: 10 }
+                    },
+                    y: { title: { display: true, text: '指数值' } }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                interaction: { mode: 'nearest', intersect: false }
             }
         });
-        const ctxVIX = document.getElementById('vixChart').getContext('2d');
-        new Chart(ctxVIX, {
+
+        // RSI chart
+        const rsiCtx = document.getElementById('rsiChart').getContext('2d');
+        new Chart(rsiCtx, {
+            type: 'line',
+            data: {
+                labels: nasdaqDates,
+                datasets: [
+                    {
+                        label: 'RSI',
+                        data: data.nasdaq.rsi,
+                        borderColor: '#00bfa5',
+                        borderWidth: 1.5,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', displayFormats: { month: 'yyyy-MM' } },
+                        ticks: { maxTicksLimit: 10 }
+                    },
+                    y: { min: 0, max: 100, title: { display: true, text: 'RSI' } }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { mode: 'index', intersect: false },
+                    annotation: {
+                        annotations: {
+                            overbought: {
+                                type: 'line',
+                                yMin: 70,
+                                yMax: 70,
+                                borderColor: 'red',
+                                borderWidth: 1,
+                                label: { content: '70 - 超买', enabled: true, position: 'end' }
+                            },
+                            oversold: {
+                                type: 'line',
+                                yMin: 30,
+                                yMax: 30,
+                                borderColor: 'green',
+                                borderWidth: 1,
+                                label: { content: '30 - 超卖', enabled: true, position: 'end' }
+                            }
+                        }
+                    }
+                },
+                interaction: { mode: 'nearest', intersect: false }
+            }
+        });
+
+        // VIX chart
+        const vixCtx = document.getElementById('vixChart').getContext('2d');
+        new Chart(vixCtx, {
             type: 'line',
             data: {
                 labels: vixDates,
                 datasets: [
                     {
-                        label: 'VIX指数',
-                        data: vixValues,
-                        borderColor: '#b91c1c',
-                        fill: false,
-                        tension: 0.1
+                        label: 'VIX 收盘价',
+                        data: data.vix.close,
+                        borderColor: '#FF5722',
+                        borderWidth: 1.5,
+                        fill: false
                     }
                 ]
             },
             options: {
-                plugins: { legend: { display: true } },
-                scales: { y: { suggestedMin: 0 } }
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', displayFormats: { month: 'yyyy-MM' } },
+                        ticks: { maxTicksLimit: 10 }
+                    },
+                    y: { title: { display: true, text: 'VIX' } }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                interaction: { mode: 'nearest', intersect: false }
             }
         });
     }
 
-    /**
-     * 主函数：加载数据并更新看板
-     */
-    async function updateBoard() {
-        try {
-            // 使用 CORS 代理获取纳斯达克和 VIX 数据
-            const nasdaqUrl = CORS_PROXY + encodeURIComponent(NASDAQ_CSV_URL);
-            const vixUrl = CORS_PROXY + encodeURIComponent(VIX_CSV_URL);
-            const nasdaqData = await loadCSV(nasdaqUrl);
-            const vixData = await loadCSV(vixUrl);
-            // 将数据按日期升序排序，确保时间序列正确
-            const zipNasdaq = nasdaqData.dates.map((d, i) => ({ date: d, value: nasdaqData.values[i] }));
-            zipNasdaq.sort((a, b) => new Date(a.date) - new Date(b.date));
-            const nasdaqDates = zipNasdaq.map(item => item.date);
-            const nasdaqPrices = zipNasdaq.map(item => item.value);
-            const zipVix = vixData.dates.map((d, i) => ({ date: d, value: vixData.values[i] }));
-            zipVix.sort((a, b) => new Date(a.date) - new Date(b.date));
-            // 只保留最近120天的VIX数据
-            const vixSortedDates = zipVix.map(item => item.date);
-            const vixSortedValues = zipVix.map(item => item.value);
-            const vixRecentCount = 120;
-            const vixDates = vixSortedDates.slice(-vixRecentCount);
-            const vixValues = vixSortedValues.slice(-vixRecentCount);
-            // 仅保留最近 400 个交易日数据以加快计算
-            const recentCount = 400;
-            const trimmedDates = nasdaqDates.slice(-recentCount);
-            const trimmedPrices = nasdaqPrices.slice(-recentCount);
-            // 计算 200 日均线数组
-            const ma200Values = [];
-            for (let i = 0; i < trimmedPrices.length; i++) {
-                if (i < 200) {
-                    ma200Values.push(null);
-                } else {
-                    const window = trimmedPrices.slice(i - 199, i + 1);
-                    const avg = window.reduce((a, b) => a + b, 0) / 200;
-                    ma200Values.push(avg);
-                }
-            }
-            // 计算 MACD
-            const macdData = calculateMACD(trimmedPrices);
-            // 计算 RSI
-            const rsiData = calculateRSI(trimmedPrices);
-            // 最新数据
-            const lastPrice = trimmedPrices[trimmedPrices.length - 1];
-            const lastMA200 = ma200Values[ma200Values.length - 1];
-            const lastMACD = macdData.macdLine[macdData.macdLine.length - 1];
-            const lastSignal = macdData.signalLine[macdData.signalLine.length - 1];
-            const lastRSI = rsiData[rsiData.length - 1];
-            const lastVIX = vixValues[vixValues.length - 1];
-            const lastDate = trimmedDates[trimmedDates.length - 1];
-            // 更新顶部文字
-            const summary = document.getElementById('summary-text');
-            summary.innerHTML = `<strong>数据更新日期：</strong>${lastDate} &nbsp;&nbsp; <strong>纳指收盘价：</strong>${lastPrice.toFixed(2)}`;
-            // 更新灯
-            updateLights({ price: lastPrice, ma200: lastMA200, macd: lastMACD, signal: lastSignal, rsi: lastRSI, vix: lastVIX });
-            // 绘制图表
-            drawCharts({ nasdaqDates: trimmedDates, nasdaqPrices: trimmedPrices, ma200Values, macdData, rsiData, vixDates, vixValues });
-        } catch (error) {
-            console.error('更新数据出错：', error);
-            alert('更新数据失败，可能是网络问题或数据源不可用。');
-        }
-    }
-    // 页面加载时自动更新
-    updateBoard();
-</script>
+    // 页面加载完成后，异步获取 JSON 数据并初始化图表
+    window.addEventListener('DOMContentLoaded', () => {
+        fetch('nasdaq_vix_data.json')
+            .then(response => response.json())
+            .then(json => {
+                initializeDashboard(json);
+            })
+            .catch(err => {
+                console.error('加载数据失败', err);
+                document.getElementById('summary').innerHTML = '<p style="color:red">数据加载失败，请检查 nasdaq_vix_data.json 文件是否存在。</p>';
+            });
+    });
+    </script>
 </body>
 </html>
