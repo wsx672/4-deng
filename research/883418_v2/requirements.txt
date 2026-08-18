@@ -1,0 +1,7 @@
+tushare>=1.4.21
+pandas>=2.2
+numpy>=2.0
+scipy>=1.13
+pyarrow>=17.0
+tabulate>=0.9
+requests>=2.31
