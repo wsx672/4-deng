@@ -1,0 +1,138 @@
+name: 883418 Tushare probe
+
+on:
+  push:
+    branches:
+      - research/883418-v2-20260818
+    paths:
+      - .github/workflows/883418_probe.yml
+      - research/883418_v2/probe_current.py
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: 883418-tushare-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Publish one-time encryption key
+        id: exchange
+        shell: bash
+        run: |
+          set -euo pipefail
+          SESSION="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          EXCHANGE_DIR="research/883418_v2/key_exchange_probe"
+          PUBLIC_PATH="${EXCHANGE_DIR}/public_${SESSION}.pem"
+          CIPHER_PATH="${EXCHANGE_DIR}/encrypted_${SESSION}.b64"
+          mkdir -p "${EXCHANGE_DIR}"
+
+          openssl genpkey \
+            -algorithm RSA \
+            -pkeyopt rsa_keygen_bits:3072 \
+            -out /tmp/883418_probe_private.pem 2>/dev/null
+          openssl pkey \
+            -in /tmp/883418_probe_private.pem \
+            -pubout \
+            -out "${PUBLIC_PATH}" 2>/dev/null
+
+          python - <<PY
+          import json
+          from pathlib import Path
+          payload = {
+              "session": "${SESSION}",
+              "public_key_path": "${PUBLIC_PATH}",
+              "cipher_path": "${CIPHER_PATH}",
+              "algorithm": "RSA-OAEP-SHA256",
+              "run_id": "${GITHUB_RUN_ID}",
+          }
+          Path("${EXCHANGE_DIR}/active_run.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${PUBLIC_PATH}" "${EXCHANGE_DIR}/active_run.json"
+          git commit -m "Publish ephemeral key for 883418 probe ${SESSION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          echo "cipher_path=${CIPHER_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Receive and decrypt token
+        shell: bash
+        env:
+          CIPHER_PATH: ${{ steps.exchange.outputs.cipher_path }}
+        run: |
+          set -euo pipefail
+          FOUND=0
+          for _ in $(seq 1 180); do
+            git fetch origin "${GITHUB_REF_NAME}" --quiet
+            if git cat-file -e "origin/${GITHUB_REF_NAME}:${CIPHER_PATH}" 2>/dev/null; then
+              git show "origin/${GITHUB_REF_NAME}:${CIPHER_PATH}" > /tmp/883418_probe_cipher.b64
+              FOUND=1
+              break
+            fi
+            sleep 3
+          done
+          if [ "${FOUND}" != "1" ]; then
+            echo "Encrypted token was not received." >&2
+            exit 2
+          fi
+
+          base64 --decode /tmp/883418_probe_cipher.b64 > /tmp/883418_probe_cipher.bin
+          openssl pkeyutl \
+            -decrypt \
+            -inkey /tmp/883418_probe_private.pem \
+            -in /tmp/883418_probe_cipher.bin \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -pkeyopt rsa_mgf1_md:sha256 \
+            -out /tmp/883418_probe_token.txt
+
+          TUSHARE_TOKEN="$(tr -d '\r\n' < /tmp/883418_probe_token.txt)"
+          echo "::add-mask::${TUSHARE_TOKEN}"
+          printf 'TUSHARE_TOKEN=%s\n' "${TUSHARE_TOKEN}" >> "${GITHUB_ENV}"
+          rm -f /tmp/883418_probe_cipher.b64 /tmp/883418_probe_cipher.bin /tmp/883418_probe_token.txt
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install probe dependencies
+        run: python -m pip install tushare pandas
+
+      - name: Run endpoint probe
+        env:
+          TUSHARE_PROXY_URL: https://fast.xiaodefa.cn
+          OUTPUT_DIR: probe_output
+        run: python research/883418_v2/probe_current.py 2>&1 | tee probe_output.log
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 883418-tushare-probe-${{ github.run_id }}
+          path: |
+            probe_output
+            probe_output.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Remove private material
+        if: always()
+        run: rm -f /tmp/883418_probe_private.pem /tmp/883418_probe_token.txt /tmp/883418_probe_cipher.bin /tmp/883418_probe_cipher.b64
