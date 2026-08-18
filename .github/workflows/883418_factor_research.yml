@@ -1,0 +1,172 @@
+name: 883418 factor research
+
+on:
+  push:
+    branches:
+      - research/883418-v2-20260818
+    paths:
+      - .github/workflows/883418_factor_research.yml
+      - research/883418_v2/run_research.py
+      - research/883418_v2/run_research_streaming.py
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: 883418-factor-research
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+
+    steps:
+      - name: Check out research branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Publish one-time encryption key
+        id: exchange
+        shell: bash
+        run: |
+          set -euo pipefail
+          SESSION="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          EXCHANGE_DIR="research/883418_v2/key_exchange"
+          PUBLIC_PATH="${EXCHANGE_DIR}/public_${SESSION}.pem"
+          CIPHER_PATH="${EXCHANGE_DIR}/encrypted_${SESSION}.b64"
+          mkdir -p "${EXCHANGE_DIR}"
+
+          openssl genpkey \
+            -algorithm RSA \
+            -pkeyopt rsa_keygen_bits:3072 \
+            -out /tmp/883418_private.pem 2>/dev/null
+          openssl pkey \
+            -in /tmp/883418_private.pem \
+            -pubout \
+            -out "${PUBLIC_PATH}" 2>/dev/null
+
+          python - <<PY
+          import json
+          from pathlib import Path
+          payload = {
+              "session": "${SESSION}",
+              "public_key_path": "${PUBLIC_PATH}",
+              "cipher_path": "${CIPHER_PATH}",
+              "algorithm": "RSA-OAEP-SHA256",
+              "run_id": "${GITHUB_RUN_ID}",
+          }
+          Path("${EXCHANGE_DIR}/active_run.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${PUBLIC_PATH}" "${EXCHANGE_DIR}/active_run.json"
+          git commit -m "Publish ephemeral key for 883418 research ${SESSION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          echo "session=${SESSION}" >> "${GITHUB_OUTPUT}"
+          echo "cipher_path=${CIPHER_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Receive and decrypt temporary Tushare token
+        shell: bash
+        env:
+          CIPHER_PATH: ${{ steps.exchange.outputs.cipher_path }}
+        run: |
+          set -euo pipefail
+          FOUND=0
+          for _ in $(seq 1 360); do
+            git fetch origin "${GITHUB_REF_NAME}" --quiet
+            if git cat-file -e "origin/${GITHUB_REF_NAME}:${CIPHER_PATH}" 2>/dev/null; then
+              git show "origin/${GITHUB_REF_NAME}:${CIPHER_PATH}" > /tmp/883418_cipher.b64
+              FOUND=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "${FOUND}" != "1" ]; then
+            echo "Encrypted token was not received." >&2
+            exit 2
+          fi
+
+          base64 --decode /tmp/883418_cipher.b64 > /tmp/883418_cipher.bin
+          openssl pkeyutl \
+            -decrypt \
+            -inkey /tmp/883418_private.pem \
+            -in /tmp/883418_cipher.bin \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -pkeyopt rsa_mgf1_md:sha256 \
+            -out /tmp/883418_token.txt
+
+          TUSHARE_TOKEN="$(tr -d '\r\n' < /tmp/883418_token.txt)"
+          if [ "${#TUSHARE_TOKEN}" -lt 32 ]; then
+            echo "Decrypted token failed validation." >&2
+            exit 3
+          fi
+          echo "::add-mask::${TUSHARE_TOKEN}"
+          printf 'TUSHARE_TOKEN=%s\n' "${TUSHARE_TOKEN}" >> "${GITHUB_ENV}"
+          rm -f /tmp/883418_cipher.b64 /tmp/883418_cipher.bin /tmp/883418_token.txt
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install research dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            tushare \
+            pandas \
+            numpy \
+            scipy \
+            pyarrow \
+            tabulate
+
+      - name: Restore raw market cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/883418_v2
+          key: ${{ runner.os }}-883418-v2-20180101-20260818
+
+      - name: Run replication, factor tests and ablation backtests
+        shell: bash
+        env:
+          TUSHARE_PROXY_URL: https://fast.xiaodefa.cn
+          START_DATE: "20180101"
+          END_DATE: "20260818"
+          OUTPUT_DIR: research_output
+          CACHE_DIR: .cache/883418_v2
+          MAX_WORKERS: "6"
+          MIN_STOCKS: "150"
+          BASE_N: "200"
+          BASE_COST_BPS: "10"
+        run: |
+          set -euo pipefail
+          mkdir -p research_output
+          python research/883418_v2/run_research_streaming.py 2>&1 | tee research_output/run.log
+
+      - name: Upload research results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 883418-factor-research-${{ github.run_id }}
+          path: research_output
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Remove ephemeral private material
+        if: always()
+        shell: bash
+        run: |
+          rm -f /tmp/883418_private.pem /tmp/883418_token.txt /tmp/883418_cipher.bin /tmp/883418_cipher.b64
