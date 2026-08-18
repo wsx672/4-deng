@@ -8,6 +8,7 @@ on:
       - .github/workflows/883418_factor_research.yml
       - research/883418_v2/run_research.py
       - research/883418_v2/run_research_streaming.py
+      - research/883418_v2/run_research_entry.py
 
 permissions:
   contents: write
@@ -136,24 +137,26 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/883418_v2
-          key: ${{ runner.os }}-883418-v2-20180101-20260818
+          key: ${{ runner.os }}-883418-v2-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-883418-v2-
 
       - name: Run replication, factor tests and ablation backtests
         shell: bash
         env:
           TUSHARE_PROXY_URL: https://fast.xiaodefa.cn
-          START_DATE: "20180101"
+          START_DATE: "20200101"
           END_DATE: "20260818"
           OUTPUT_DIR: research_output
           CACHE_DIR: .cache/883418_v2
-          MAX_WORKERS: "6"
+          MAX_WORKERS: "8"
           MIN_STOCKS: "150"
           BASE_N: "200"
           BASE_COST_BPS: "10"
         run: |
           set -euo pipefail
           mkdir -p research_output
-          python research/883418_v2/run_research_streaming.py 2>&1 | tee research_output/run.log
+          python research/883418_v2/run_research_entry.py 2>&1 | tee research_output/run.log
 
       - name: Upload research results
         if: always()
